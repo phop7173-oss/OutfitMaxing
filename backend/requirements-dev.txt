@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest==8.3.4
+httpx==0.28.1
+# Linting: ruff runs in CI (pinned there); locally on Termux it is optional.

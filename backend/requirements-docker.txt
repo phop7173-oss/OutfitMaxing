@@ -1,0 +1,4 @@
+# Performance extras for Docker, CI and VPS (prebuilt wheels exist there; not on Termux).
+-r requirements.txt
+uvicorn[standard]==0.54.0
+psycopg[binary]==3.3.9
