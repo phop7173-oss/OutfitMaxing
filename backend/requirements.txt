@@ -1,0 +1,9 @@
+# Exact versions verified on Termux (Python 3.14) with the full test-suite passing.
+# Transitive dependencies are resolved by pip; CI on Python 3.12 is the second check.
+fastapi==0.162.5
+uvicorn==0.54.0
+pydantic==2.14.3
+pydantic-settings==2.16.2
+SQLAlchemy==2.0.57
+alembic==1.20.1
+psycopg==3.3.9
