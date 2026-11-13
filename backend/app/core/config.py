@@ -63,7 +63,9 @@ class Settings(BaseSettings):
         if self.app_env == "production" and (
             "outfitmaxing:outfitmaxing@" in self.database_url or "change-me" in self.database_url
         ):
-            raise ValueError("Production requires a non-default DATABASE_URL (no example credentials)")
+            raise ValueError(
+                "Production requires a non-default DATABASE_URL (no example credentials)"
+            )
         return self
 
     def secret_values(self) -> list[str]:
