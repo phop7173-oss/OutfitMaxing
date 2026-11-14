@@ -61,3 +61,6 @@ PostgreSQL. All primary keys are UUID. Money is `BIGINT` MMK (never float). All 
 - `payments`: add `verified_by` (staff user id, nullable) and `verification_note`; manual digital payments move to VERIFIED only through the admin service with a named actor.
 - Preorder deposit: `orders` gains `deposit_amount_mmk` and `balance_due_mmk` (CHECK deposit + balance = total) once U4 is resolved.
 - No business tables are created in Phase 2; `migrations/versions/` is intentionally empty.
+
+## Implemented in migration 0001 (catalog)
+`product_categories`, `products`, `product_variants`, `product_images`, sequence `product_code_seq` (public codes `OM-P-000123`). Differences from the first design: categories have no guard column (the excluded-category rule is code in `products/service.py`); no `offers` yet; the same-product rule for variant images is a composite foreign key `(product_id, variant_id)`; "same size+color" is a functional unique index `uq_product_variants_combo` (created in the migration, ignored by Alembic autogenerate); `fulfilment_mode` can be changed until inventory exists (to be restricted in the inventory task).

@@ -3,6 +3,7 @@
 import logging
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.core.logging import safe_exception_summary
@@ -22,6 +23,26 @@ class AppError(Exception):
 class NotFoundError(AppError):
     status_code = 404
     code = "not_found"
+
+
+class ConflictError(AppError):
+    status_code = 409
+    code = "conflict"
+
+
+class UnprocessableError(AppError):
+    status_code = 422
+    code = "unprocessable"
+
+
+class UnauthorizedError(AppError):
+    status_code = 401
+    code = "unauthorized"
+
+
+class ServiceUnavailableError(AppError):
+    status_code = 503
+    code = "service_unavailable"
 
 
 def _envelope(request: Request, code: str, message: str, status: int) -> JSONResponse:
@@ -56,6 +77,26 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
         return _envelope(request, exc.code, exc.message, exc.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # Field paths and messages only: never echo the submitted values.
+        details = [
+            {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
+            for e in exc.errors()
+        ]
+        request_id = getattr(request.state, "request_id", None)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "validation_error",
+                    "message": "Invalid request",
+                    "details": details,
+                    "request_id": request_id,
+                }
+            },
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:

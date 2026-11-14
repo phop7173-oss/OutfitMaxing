@@ -15,7 +15,7 @@ Status: Phase 1 documents approved as baseline (with the clarifications below). 
 | 1 | Planning docs | Approved | |
 | 2 | Foundation scaffold: FastAPI app, config, SQLAlchemy base, Alembic (no tables), health endpoints, logging, pytest harness, Docker Compose (api, postgres, redis), `.gitignore`, `.env.example`, CI | Delivered, **not yet executed** (see below) | `docker compose up` works; CI green on GitHub |
 | 2.1 | Verification and CI hardening: Docker image build job, informational Python 3.14 job, local line-length check (`scripts/check_line_length.py`, wired into `scripts/termux/lint.sh`) | Delivered (see PR) | CI green including the docker-build job |
-| 3 | Business core: products, variants, offers, suppliers, inventory, reservations, orders, checkout, payments abstraction + COD, `shop_settings`; adds Celery worker | Not started | Inventory + order test matrix green incl. concurrent last-item test |
+| 3 | Task 1 (catalog) delivered, unverified until CI and Termux tests pass. Business core: products, variants, offers, suppliers, inventory, reservations, orders, checkout, payments abstraction + COD, `shop_settings`; adds Celery worker | Not started | Inventory + order test matrix green incl. concurrent last-item test |
 | 4 | Telegram + AI provider abstraction (Gemini first), tools, conversation persistence | Not started | AI + Telegram matrices green |
 | 5 | Delivery abstraction, own delivery, mock courier, tracking, manual digital-payment verification flow | Not started | Delivery matrix green |
 | 6 | Admin API, operational controls, security tests, deployment + backup/restore docs | Not started | Security checklist passed; restore drill documented |
@@ -55,3 +55,6 @@ Status: Phase 1 documents approved as baseline (with the clarifications below). 
 ## Next task (after you review the scaffold)
 1. Run CI / local tests and report the result so Phase 2 can be marked verified.
 2. Then Phase 3 task 1: product, category and variant models + migrations + catalog API, with tests.
+
+## Phase 3 task 1: catalog (delivered, pending verification)
+Tables `product_categories`, `products`, `product_variants`, `product_images` (migration 0001), public read API and interim key-protected admin API, 60+ tests (schemas without a database; service and API against real PostgreSQL). Details: docs/CATALOG-API.md. Next: offers (prices) and inventory/reservations with the concurrency tests. Owner decisions are logged in docs/DECISIONS.md.
