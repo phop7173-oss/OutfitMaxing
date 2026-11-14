@@ -56,3 +56,6 @@ Only staff/owner roles can mark a digital payment verified, with actor and evide
 - Local PostgreSQL and Redis bind to 127.0.0.1 only; local socket access is trust-authenticated (single-user device), TCP requires a password. Use a device lock screen and encryption.
 - `.env` is created with a random password and mode 600; it is git-ignored and CI fails if a `.env` file is tracked.
 - Use SSH keys for GitHub; never store tokens in the repository or paste them into chats. Do not run the production system or hold production secrets on the phone.
+
+## Interim admin key (catalog task)
+Catalog write endpoints need `X-Admin-Key` (`ADMIN_API_KEY`, min 16 chars, compared in constant time, registered for log redaction). It fails closed when unset. It is a single shared key with no roles and no rate limiting; it is replaced by login plus role-based authorization in Phase 6, and rate limiting is still missing (see audit). Validation errors never echo submitted values.

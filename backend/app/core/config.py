@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # .env lives in the repository root; also accept backend/.env. Missing files are ignored.
@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # Technical default from the master prompt (not a business policy that needs approval).
     reservation_ttl_minutes: int = Field(default=15, ge=1)
 
+    # Interim guard for catalog write endpoints until Phase 6 login/roles.
+    # Unset means the admin API is disabled.
+    admin_api_key: SecretStr | None = None
+
     # AI provider abstraction (provider implementation arrives in Phase 4).
     ai_provider: str = "gemini"
     ai_model: str | None = None
@@ -58,6 +62,13 @@ class Settings(BaseSettings):
     policy_cod_manual_review_above_mmk: int | None = Field(default=None, ge=0)
     policies_approved_for_launch: bool = False
 
+    @field_validator("admin_api_key")
+    @classmethod
+    def _admin_key_strength(cls, v: SecretStr | None) -> SecretStr | None:
+        if v is not None and len(v.get_secret_value()) < 16:
+            raise ValueError("ADMIN_API_KEY must be at least 16 characters")
+        return v
+
     @model_validator(mode="after")
     def _production_guards(self) -> "Settings":
         if self.app_env == "production" and (
@@ -71,7 +82,12 @@ class Settings(BaseSettings):
     def secret_values(self) -> list[str]:
         """Exact secret values to redact from logs (best-effort, see app/core/logging.py)."""
         values: list[str] = []
-        for secret in (self.ai_api_key, self.telegram_bot_token, self.telegram_webhook_secret):
+        for secret in (
+            self.admin_api_key,
+            self.ai_api_key,
+            self.telegram_bot_token,
+            self.telegram_webhook_secret,
+        ):
             if secret is not None:
                 values.append(secret.get_secret_value())
         for url in (self.database_url, self.redis_url):

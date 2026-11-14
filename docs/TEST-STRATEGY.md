@@ -42,3 +42,12 @@ Health liveness/readiness (incl. DB-down path), configuration defaults and produ
 
 ## Running tests on Termux
 `bash scripts/termux/test.sh` runs pytest against the local `outfitmaxing_test` database (real PostgreSQL). Lint runs in CI (and optionally via `scripts/termux/lint.sh`).
+
+## CI jobs
+- `backend` (Python 3.12, PostgreSQL 16): `.env` tracking check, ruff, `alembic upgrade head`, pytest. This is the merge gate.
+- `backend-py314` (informational, may fail without blocking): same steps on Python 3.14, the version Termux runs, to surface version drift early.
+- `docker-build`: builds the API image without pushing it.
+- Locally on Termux, ruff is usually not installable: `bash scripts/termux/lint.sh` runs the stdlib line-length check (same E501 limit); CI remains the authority for ruff.
+
+## Catalog tests (Phase 3 task 1)
+`test_catalog_schemas.py` (no database), `test_catalog_service.py` (real PostgreSQL, savepoint rollback per test: category rules and the excluded-category guard, public codes, variant uniqueness incl. NULL size/color, status rules, listing/search/pagination, database-level constraints), `test_catalog_api.py` (auth, 503 when no key, end-to-end flow, hidden inactive variants, error envelope, no internal ids), `test_config_admin.py`.

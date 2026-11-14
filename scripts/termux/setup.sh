@@ -24,7 +24,7 @@ pip install -r backend/requirements-dev.txt
 echo "==> Checking the PostgreSQL driver"
 if ! python -c "import psycopg; psycopg.pq.version()" 2>/dev/null; then
   echo "Pure-Python psycopg could not load libpq; building the C implementation instead"
-  pip install "psycopg-c==$(python -c 'import importlib.metadata as m; print(m.version("psycopg"))')"
+  pip install "psycopg-c==3.2.3"
 fi
 python -c "import psycopg; print('psycopg OK, implementation:', psycopg.pq.__impl__)"
 
@@ -34,6 +34,11 @@ PW="$(grep -E '^POSTGRES_PASSWORD=' .env | cut -d= -f2- || true)"
 if [ -z "$PW" ] || [ "$PW" = "change-me" ]; then
   PW="$(python -c 'import secrets; print(secrets.token_hex(16))')"
   sed -i "s/change-me/$PW/g" .env     # random local password instead of the example one
+fi
+[ -z "$(tail -c1 .env)" ] || echo >> .env
+if ! grep -qE '^ADMIN_API_KEY=.+' .env; then
+  sed -i '/^ADMIN_API_KEY=/d' .env
+  echo "ADMIN_API_KEY=$(python -c 'import secrets; print(secrets.token_hex(24))')" >> .env
 fi
 chmod 600 .env
 

@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 
-from app.api import health
+from app.api import catalog, health
 from app.core.config import get_settings
 from app.core.exceptions import internal_error_response, register_exception_handlers
 from app.core.logging import configure_logging, request_id_var
@@ -34,6 +34,8 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health.router)
+    app.include_router(catalog.public_router)
+    app.include_router(catalog.admin_router)
     logging.getLogger(__name__).info("app_started", extra={"fields": {"env": settings.app_env}})
     return app
 

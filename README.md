@@ -73,3 +73,6 @@ pytest -q
 
 ## Logging and secrets
 Logs are JSON on stdout. Exception messages and traceback text are never logged (only exception types and code locations), query strings are stripped from access logs, and configured secrets plus common credential patterns are redacted from log messages on a best-effort basis. Redaction is **not** a guarantee for secrets in arbitrary formats, so never log secrets or personal data. Details: `docs/SECURITY-PLAN.md`.
+
+## API
+Catalog endpoints and examples: [docs/CATALOG-API.md](docs/CATALOG-API.md). Owner decisions: [docs/DECISIONS.md](docs/DECISIONS.md).
