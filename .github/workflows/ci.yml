@@ -40,3 +40,43 @@ jobs:
       - run: ruff check .
       - run: alembic upgrade head
       - run: pytest -q
+
+  # Same checks on Python 3.14 (what Termux runs). Informational: a failure here does not
+  # block merging, but shows version drift early.
+  backend-py314:
+    name: backend (python 3.14, informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
+      TEST_DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements-docker.txt -r requirements-dev.txt
+      - run: alembic upgrade head
+      - run: pytest -q
+
+  # Builds the API image (no push) so Dockerfile or dependency problems are caught in CI.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag outfitmaxing-api:ci backend
