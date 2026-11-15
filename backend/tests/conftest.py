@@ -23,7 +23,7 @@ def _db_engine():
     if not url:
         pytest.skip("needs TEST_DATABASE_URL (real PostgreSQL)")
     engine = create_engine(url)
-    if not inspect(engine).has_table("products"):
+    if not inspect(engine).has_table("offers"):
         pytest.fail("Test database has no schema: run `alembic upgrade head` against it first.")
     yield engine
     engine.dispose()

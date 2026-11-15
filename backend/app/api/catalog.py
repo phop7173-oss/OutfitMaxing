@@ -1,6 +1,7 @@
 """Catalog API. Public: read-only, ACTIVE products. Admin: write, requires X-Admin-Key."""
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -8,12 +9,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.database.session import get_db
 from app.modules.products import service
-from app.modules.products.models import Product, ProductCategory
+from app.modules.products.models import Offer, Product, ProductCategory
 from app.modules.products.schemas import (
     CategoryCreate,
     CategoryOut,
     ImageCreate,
     ImageOut,
+    OfferCreate,
+    OfferOut,
     ProductCreate,
     ProductOut,
     ProductPage,
@@ -39,8 +42,14 @@ def category_out(c: ProductCategory) -> CategoryOut:
     )
 
 
-def product_out(p: Product, *, public: bool) -> ProductOut:
-    variants = [v for v in p.variants if v.is_active or not public]
+def prices_for(db: Session, products: list[Product]) -> dict[UUID, Offer]:
+    return service.current_prices(db, [v.id for p in products for v in p.variants])
+
+
+def product_out(p: Product, *, public: bool, prices: dict[UUID, Offer]) -> ProductOut:
+    """Public view: only active variants that have a current price (the others cannot be
+    bought). Admin view: everything, with price null where none is in effect."""
+    variants = [v for v in p.variants if not public or (v.is_active and v.id in prices)]
     visible = {v.id for v in variants}
     images = [i for i in p.images if i.variant_id is None or i.variant_id in visible]
     return ProductOut(
@@ -54,7 +63,15 @@ def product_out(p: Product, *, public: bool) -> ProductOut:
         status=p.status,
         attributes=p.attributes,
         variants=[
-            VariantOut(sku=v.sku, size=v.size, color=v.color, extra=v.extra, is_active=v.is_active)
+            VariantOut(
+                sku=v.sku,
+                size=v.size,
+                color=v.color,
+                extra=v.extra,
+                is_active=v.is_active,
+                price_mmk=prices[v.id].price_mmk if v.id in prices else None,
+                compare_at_price_mmk=prices[v.id].compare_at_price_mmk if v.id in prices else None,
+            )
             for v in variants
         ],
         images=[
@@ -67,6 +84,23 @@ def product_out(p: Product, *, public: bool) -> ProductOut:
             )
             for i in images
         ],
+    )
+
+
+def admin_out(db: Session, p: Product) -> ProductOut:
+    return product_out(p, public=False, prices=prices_for(db, [p]))
+
+
+def offer_out(o: Offer) -> OfferOut:
+    return OfferOut(
+        id=str(o.id),
+        sku=o.variant.sku,
+        price_mmk=o.price_mmk,
+        compare_at_price_mmk=o.compare_at_price_mmk,
+        starts_at=o.starts_at,
+        ends_at=o.ends_at,
+        status=o.status,
+        is_current=service.offer_is_current(o),
     )
 
 
@@ -87,14 +121,19 @@ def public_products(
     items, total = service.list_public_products(
         db, category_slug=category, q=q, limit=limit, offset=offset
     )
+    prices = prices_for(db, items)
     return ProductPage(
-        items=[product_out(p, public=True) for p in items], total=total, limit=limit, offset=offset
+        items=[product_out(p, public=True, prices=prices) for p in items],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 
 @public_router.get("/products/{code}")
 def public_product(code: str, db: Db) -> ProductOut:
-    return product_out(service.get_product(db, code, public=True), public=True)
+    product = service.get_product(db, code, public=True)
+    return product_out(product, public=True, prices=prices_for(db, [product]))
 
 
 # ---- admin ----------------------------------------------------------------------------------
@@ -105,29 +144,44 @@ def admin_create_category(data: CategoryCreate, db: Db) -> CategoryOut:
 
 @admin_router.post("/products", status_code=201)
 def admin_create_product(data: ProductCreate, db: Db) -> ProductOut:
-    return product_out(service.create_product(db, data), public=False)
+    return admin_out(db, service.create_product(db, data))
 
 
 @admin_router.get("/products/{code}")
 def admin_get_product(code: str, db: Db) -> ProductOut:
-    return product_out(service.get_product(db, code, public=False), public=False)
+    return admin_out(db, service.get_product(db, code, public=False))
 
 
 @admin_router.patch("/products/{code}")
 def admin_update_product(code: str, data: ProductUpdate, db: Db) -> ProductOut:
-    return product_out(service.update_product(db, code, data), public=False)
+    return admin_out(db, service.update_product(db, code, data))
 
 
 @admin_router.post("/products/{code}/variants", status_code=201)
 def admin_add_variant(code: str, data: VariantCreate, db: Db) -> ProductOut:
-    return product_out(service.add_variant(db, code, data), public=False)
+    return admin_out(db, service.add_variant(db, code, data))
 
 
 @admin_router.patch("/variants/{sku}")
 def admin_update_variant(sku: str, data: VariantUpdate, db: Db) -> ProductOut:
-    return product_out(service.update_variant(db, sku, data), public=False)
+    return admin_out(db, service.update_variant(db, sku, data))
 
 
 @admin_router.post("/products/{code}/images", status_code=201)
 def admin_add_image(code: str, data: ImageCreate, db: Db) -> ProductOut:
-    return product_out(service.add_image(db, code, data), public=False)
+    return admin_out(db, service.add_image(db, code, data))
+
+
+@admin_router.post("/variants/{sku}/offers", status_code=201)
+def admin_create_offer(sku: str, data: OfferCreate, db: Db) -> OfferOut:
+    return offer_out(service.create_offer(db, sku, data))
+
+
+@admin_router.get("/variants/{sku}/offers")
+def admin_list_offers(sku: str, db: Db) -> list[OfferOut]:
+    return [offer_out(o) for o in service.list_offers(db, sku)]
+
+
+@admin_router.post("/offers/{offer_id}/cancel")
+def admin_cancel_offer(offer_id: UUID, db: Db) -> OfferOut:
+    return offer_out(service.cancel_offer(db, offer_id))

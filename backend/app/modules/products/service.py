@@ -1,13 +1,16 @@
 """Catalog service. Owns transactions: each public function commits or raises."""
 
 import re
+import uuid
+from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError, UnprocessableError
 from app.modules.products.models import (
+    Offer,
     Product,
     ProductCategory,
     ProductImage,
@@ -17,6 +20,7 @@ from app.modules.products.models import (
 from app.modules.products.schemas import (
     CategoryCreate,
     ImageCreate,
+    OfferCreate,
     ProductCreate,
     ProductUpdate,
     VariantCreate,
@@ -92,6 +96,40 @@ def _require_product(session: Session, code: str) -> Product:
     return product
 
 
+# ---- prices (offers) helpers ------------------------------------------------------------------
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _current_offer_conditions(now: datetime) -> list[ColumnElement[bool]]:
+    return [
+        Offer.status == "ACTIVE",
+        Offer.starts_at <= now,
+        or_(Offer.ends_at.is_(None), Offer.ends_at > now),
+    ]
+
+
+def current_prices(
+    session: Session, variant_ids: list[uuid.UUID], at: datetime | None = None
+) -> dict[uuid.UUID, Offer]:
+    """The price in effect for each variant at `at` (default now). Variants without one are
+    absent from the result."""
+    if not variant_ids:
+        return {}
+    now = at or _now()
+    stmt = select(Offer).where(Offer.variant_id.in_(variant_ids), *_current_offer_conditions(now))
+    return {offer.variant_id: offer for offer in session.execute(stmt).scalars()}
+
+
+def offer_is_current(offer: Offer, at: datetime | None = None) -> bool:
+    now = at or _now()
+    return (
+        offer.status == "ACTIVE"
+        and offer.starts_at <= now
+        and (offer.ends_at is None or offer.ends_at > now)
+    )
+
+
 # ---- categories -----------------------------------------------------------------------------
 def create_category(session: Session, data: CategoryCreate) -> ProductCategory:
     if is_excluded_category(data.name, data.slug):
@@ -140,16 +178,26 @@ def create_product(session: Session, data: ProductCreate) -> Product:
 
 def get_product(session: Session, code: str, *, public: bool) -> Product:
     product = _require_product(session, code)
-    if public and product.status != "ACTIVE":
-        raise NotFoundError("Product not found")
+    if public:
+        active_ids = [v.id for v in product.variants if v.is_active]
+        if product.status != "ACTIVE" or not current_prices(session, active_ids):
+            raise NotFoundError("Product not found")
     return product
 
 
-def _change_status(product: Product, target: str) -> None:
+def _change_status(session: Session, product: Product, target: str) -> None:
     if target not in STATUS_TRANSITIONS[product.status]:
         raise UnprocessableError(f"Cannot change status from {product.status} to {target}")
-    if target == "ACTIVE" and not any(v.is_active for v in product.variants):
-        raise UnprocessableError("A product needs at least one active variant before publishing")
+    if target == "ACTIVE":
+        active = [v for v in product.variants if v.is_active]
+        if not active:
+            raise UnprocessableError(
+                "A product needs at least one active variant before publishing"
+            )
+        if not current_prices(session, [v.id for v in active]):
+            raise UnprocessableError(
+                "Set a current price (offer) on at least one active variant before publishing"
+            )
     product.status = target
 
 
@@ -162,7 +210,7 @@ def update_product(session: Session, code: str, data: ProductUpdate) -> Product:
         if field in fields:
             setattr(product, field, getattr(data, field))
     if "status" in fields and data.status is not None and data.status != product.status:
-        _change_status(product, data.status)
+        _change_status(session, product, data.status)
     _commit(session, "Product")
     return _require_product(session, code)
 
@@ -170,7 +218,17 @@ def update_product(session: Session, code: str, data: ProductUpdate) -> Product:
 def list_public_products(
     session: Session, *, category_slug: str | None, q: str | None, limit: int, offset: int
 ) -> tuple[list[Product], int]:
-    conditions = [Product.status == "ACTIVE"]
+    priced_variant_exists = (
+        select(ProductVariant.id)
+        .join(Offer, Offer.variant_id == ProductVariant.id)
+        .where(
+            ProductVariant.product_id == Product.id,
+            ProductVariant.is_active.is_(True),
+            *_current_offer_conditions(_now()),
+        )
+        .exists()
+    )
+    conditions = [Product.status == "ACTIVE", priced_variant_exists]
     if category_slug:
         conditions.append(ProductCategory.slug == category_slug)
     if q:
@@ -216,28 +274,25 @@ def add_variant(session: Session, code: str, data: VariantCreate) -> Product:
 
 
 def update_variant(session: Session, sku: str, data: VariantUpdate) -> Product:
-    variant = session.execute(
-        select(ProductVariant).where(ProductVariant.sku == sku)
-    ).scalar_one_or_none()
-    if variant is None:
-        raise NotFoundError("Variant not found")
+    variant = _variant_by_sku(session, sku)
     product = session.get(Product, variant.product_id)
     fields = data.model_fields_set
     if "is_active" in fields and data.is_active is False and variant.is_active:
-        others = session.execute(
-            select(func.count())
-            .select_from(ProductVariant)
-            .where(
-                ProductVariant.product_id == variant.product_id,
-                ProductVariant.is_active.is_(True),
-                ProductVariant.id != variant.id,
+        if product is not None and product.status == "ACTIVE":
+            sibling_ids = list(
+                session.execute(
+                    select(ProductVariant.id).where(
+                        ProductVariant.product_id == variant.product_id,
+                        ProductVariant.is_active.is_(True),
+                        ProductVariant.id != variant.id,
+                    )
+                ).scalars()
             )
-        ).scalar_one()
-        if product is not None and product.status == "ACTIVE" and others == 0:
-            raise UnprocessableError(
-                "Cannot deactivate the last active variant of an active product; "
-                "change the product status first"
-            )
+            if not current_prices(session, sibling_ids):
+                raise UnprocessableError(
+                    "Cannot deactivate the last active, priced variant of an active product; "
+                    "change the product status first"
+                )
     if "is_active" in fields and data.is_active is not None:
         variant.is_active = data.is_active
     if "extra" in fields and data.extra is not None:
@@ -267,3 +322,71 @@ def add_image(session: Session, code: str, data: ImageCreate) -> Product:
     )
     _commit(session, "Image")
     return _require_product(session, code)
+
+
+# ---- offers (prices) ---------------------------------------------------------------------------
+def _variant_by_sku(session: Session, sku: str, *, lock: bool = False) -> ProductVariant:
+    stmt = select(ProductVariant).where(ProductVariant.sku == sku)
+    if lock:
+        stmt = stmt.with_for_update()
+    variant = session.execute(stmt).scalar_one_or_none()
+    if variant is None:
+        raise NotFoundError("Variant not found")
+    return variant
+
+
+def create_offer(
+    session: Session, sku: str, data: OfferCreate, *, now: datetime | None = None
+) -> Offer:
+    """Create a price for a variant.
+
+    The variant row is locked first, so concurrent offer writes for the same variant run one
+    after another; the overlap check below then sees the earlier commit. Two ACTIVE offers for
+    one variant can therefore never cover the same moment."""
+    now = now or _now()
+    variant = _variant_by_sku(session, sku, lock=True)
+    starts_at = data.starts_at or now
+    if data.ends_at is not None and data.ends_at <= starts_at:
+        session.rollback()
+        raise UnprocessableError("ends_at must be after starts_at")
+    overlap = [
+        Offer.variant_id == variant.id,
+        Offer.status == "ACTIVE",
+        or_(Offer.ends_at.is_(None), Offer.ends_at > starts_at),
+    ]
+    if data.ends_at is not None:
+        overlap.append(Offer.starts_at < data.ends_at)
+    if session.execute(select(Offer.id).where(*overlap).limit(1)).first() is not None:
+        session.rollback()
+        raise ConflictError("This variant already has a price that overlaps that period")
+    offer = Offer(
+        variant_id=variant.id,
+        price_mmk=data.price_mmk,
+        compare_at_price_mmk=data.compare_at_price_mmk,
+        starts_at=starts_at,
+        ends_at=data.ends_at,
+    )
+    session.add(offer)
+    _commit(session, "Offer")
+    return offer
+
+
+def list_offers(session: Session, sku: str) -> list[Offer]:
+    variant = _variant_by_sku(session, sku)
+    stmt = (
+        select(Offer)
+        .where(Offer.variant_id == variant.id)
+        .options(joinedload(Offer.variant))
+        .order_by(Offer.starts_at.desc(), Offer.created_at.desc())
+    )
+    return list(session.execute(stmt).scalars())
+
+
+def cancel_offer(session: Session, offer_id: uuid.UUID) -> Offer:
+    offer = session.get(Offer, offer_id)
+    if offer is None:
+        raise NotFoundError("Offer not found")
+    if offer.status != "CANCELLED":
+        offer.status = "CANCELLED"
+        _commit(session, "Offer")
+    return offer

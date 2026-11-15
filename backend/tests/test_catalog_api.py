@@ -38,6 +38,14 @@ def create_variant(api, code, sku, **kw):
     return r.json()
 
 
+def set_price(api, sku, amount=150_000, **kw):
+    r = api.post(
+        f"/admin/catalog/variants/{sku}/offers", json={"price_mmk": amount, **kw}, headers=H
+    )
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
 # ---- authentication -------------------------------------------------------------------------
 def test_admin_requires_a_valid_key(api):
     body = {"name": "Sneakers", "slug": "sneakers"}
@@ -72,6 +80,11 @@ def test_create_publish_and_browse_flow(api):
     create_variant(api, code, "AR-42-BLK", size="42", color="black")
     create_variant(api, code, "AR-43-BLK", size="43", color="black")
 
+    unpriced = api.patch(f"/admin/catalog/products/{code}", json={"status": "ACTIVE"}, headers=H)
+    assert unpriced.status_code == 422  # publishing needs a price
+    set_price(api, "AR-42-BLK", 150_000, compare_at_price_mmk=180_000)
+    set_price(api, "AR-43-BLK", 150_000)
+
     published = api.patch(f"/admin/catalog/products/{code}", json={"status": "ACTIVE"}, headers=H)
     assert published.status_code == 200
     assert published.json()["status"] == "ACTIVE"
@@ -79,6 +92,9 @@ def test_create_publish_and_browse_flow(api):
     detail = api.get(f"/catalog/products/{code}")
     assert detail.status_code == 200
     assert {v["sku"] for v in detail.json()["variants"]} == {"AR-42-BLK", "AR-43-BLK"}
+    by_sku = {v["sku"]: v for v in detail.json()["variants"]}
+    assert by_sku["AR-42-BLK"]["price_mmk"] == 150_000
+    assert by_sku["AR-42-BLK"]["compare_at_price_mmk"] == 180_000
 
     listing = api.get("/catalog/products", params={"category": "sneakers"}).json()
     assert listing["total"] == 1 and listing["items"][0]["public_code"] == code
@@ -90,6 +106,8 @@ def test_inactive_variants_and_their_images_are_hidden_publicly(api):
     code = create_product(api)
     create_variant(api, code, "AR-42", size="42")
     create_variant(api, code, "AR-43", size="43")
+    set_price(api, "AR-42")
+    set_price(api, "AR-43")
     api.patch(f"/admin/catalog/products/{code}", json={"status": "ACTIVE"}, headers=H)
     api.post(
         f"/admin/catalog/products/{code}/images",
@@ -137,7 +155,7 @@ def test_excluded_category_is_rejected(api):
     assert r.json()["error"]["code"] == "unprocessable"
 
 
-def test_prices_are_not_part_of_the_catalog_yet(api):
+def test_price_cannot_be_set_on_the_product_itself(api):
     create_category(api)
     r = api.post(
         "/admin/catalog/products",
@@ -166,6 +184,7 @@ def test_public_responses_do_not_expose_internal_ids(api):
     create_category(api)
     code = create_product(api)
     create_variant(api, code, "AR-42", size="42")
+    set_price(api, "AR-42")
     api.patch(f"/admin/catalog/products/{code}", json={"status": "ACTIVE"}, headers=H)
     category = api.get("/catalog/categories").json()[0]
     product = api.get(f"/catalog/products/{code}").json()

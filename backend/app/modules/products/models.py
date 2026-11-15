@@ -1,15 +1,17 @@
-"""Catalog tables: categories, products, variants, images. No prices or stock yet (task 2)."""
+"""Catalog tables: categories, products, variants, images, offers (prices). No stock yet."""
 
 import uuid
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     Sequence,
     String,
@@ -148,3 +150,37 @@ class ProductImage(Base):
     )
 
     variant: Mapped[ProductVariant | None] = relationship(viewonly=True)
+
+
+class Offer(TimestampMixin, Base):
+    """A price for one variant, valid for the half-open period [starts_at, ends_at).
+
+    ends_at NULL means open-ended. History is kept: offers are cancelled, never deleted.
+    Non-overlap of ACTIVE offers per variant is enforced by the service (row lock on the
+    variant), not by a database constraint."""
+
+    __tablename__ = "offers"
+    __table_args__ = (
+        CheckConstraint("price_mmk > 0", name="price_positive"),
+        CheckConstraint(
+            "compare_at_price_mmk IS NULL OR compare_at_price_mmk > price_mmk",
+            name="compare_at_above_price",
+        ),
+        CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="window_valid"),
+        CheckConstraint("status IN ('ACTIVE','CANCELLED')", name="status_valid"),
+        Index("ix_offers_variant_window", "variant_id", "starts_at", "ends_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    variant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="RESTRICT")
+    )
+    price_mmk: Mapped[int] = mapped_column(BigInteger)
+    compare_at_price_mmk: Mapped[int | None] = mapped_column(BigInteger)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(
+        String(12), default="ACTIVE", server_default=text("'ACTIVE'")
+    )
+
+    variant: Mapped[ProductVariant] = relationship()

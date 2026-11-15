@@ -45,7 +45,7 @@ def test_image_needs_https_url_or_telegram_file():
     assert ImageCreate(telegram_file_id="AgACAgUAAx0").telegram_file_id
 
 
-def test_unknown_fields_are_rejected_there_is_no_price_yet():
+def test_price_is_not_a_product_field():
     with pytest.raises(ValidationError):
         ProductCreate(name="x", category_slug="ab", fulfilment_mode="STOCK", price_mmk=1000)
 

@@ -23,5 +23,8 @@ CODE="$(printf '%s' "$OUT" | python -c 'import sys,json; print(json.load(sys.std
 echo "== variants for $CODE"
 call POST "/admin/catalog/products/$CODE/variants" "{\"sku\":\"$CODE-42-BLK\",\"size\":\"42\",\"color\":\"black\"}" >/dev/null
 call POST "/admin/catalog/products/$CODE/variants" "{\"sku\":\"$CODE-43-BLK\",\"size\":\"43\",\"color\":\"black\"}" >/dev/null
+echo "== prices"
+call POST "/admin/catalog/variants/$CODE-42-BLK/offers" '{"price_mmk":85000,"compare_at_price_mmk":100000}'
+call POST "/admin/catalog/variants/$CODE-43-BLK/offers" '{"price_mmk":85000}' >/dev/null
 echo "== publish"; call PATCH "/admin/catalog/products/$CODE" '{"status":"ACTIVE"}'
 echo "== public list (no key needed)"; curl -sS "$BASE/catalog/products?category=sneakers"; echo

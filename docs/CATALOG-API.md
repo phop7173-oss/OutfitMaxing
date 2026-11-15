@@ -1,6 +1,6 @@
 # Catalog API (Phase 3, task 1)
 
-Categories, products, variants and images. **No prices and no stock yet** (offers and inventory are the next tasks), so the API rejects unknown fields such as `price_mmk`. Nothing here exposes internal database ids: products are addressed by `public_code` (e.g. `OM-P-000123`), categories by `slug`, variants by `sku`.
+Categories, products, variants and images. Prices are managed through **offers** (below). **No stock yet** (next task). A product cannot carry a price field; unknown fields are rejected. Nothing here exposes internal database ids: products are addressed by `public_code` (e.g. `OM-P-000123`), categories by `slug`, variants by `sku`.
 
 ## Public (read-only, no key)
 - `GET /catalog/categories`
@@ -36,3 +36,19 @@ curl -s -X POST http://127.0.0.1:8000/admin/catalog/categories \
 curl -s http://127.0.0.1:8000/catalog/categories
 ```
 Errors use `{"error": {"code", "message", "request_id", ...}}`; validation errors list field names only and never echo submitted values.
+
+## Prices (offers), Phase 3 task 2a
+A price is an *offer* on one variant: whole kyat (`price_mmk`, strict integer 1-10,000,000,000), optional `compare_at_price_mmk` (must be higher), and a validity window `[starts_at, ends_at)` (`starts_at` defaults to now, `ends_at` to open-ended; datetimes need a timezone, e.g. `2026-12-01T00:00:00+06:30`).
+- `POST /admin/catalog/variants/{sku}/offers`: create (409 if it overlaps another active offer of that variant; adjacent windows are fine)
+- `GET /admin/catalog/variants/{sku}/offers`: full history, newest first
+- `POST /admin/catalog/offers/{offer_id}/cancel`: cancel (history is kept, never deleted)
+
+Rules: the server decides the current price from the offers; nothing else can set it. Publishing a product needs at least one active variant with a current price. The public API shows only active variants that have a current price (others are not purchasable) and hides products with none; the admin view shows everything with `price_mmk: null` where no price is in effect. The last active, priced variant of an ACTIVE product cannot be deactivated. If a price expires or is cancelled, the variant silently stops being purchasable.
+
+Example:
+```bash
+KEY=$(grep ^ADMIN_API_KEY= .env | cut -d= -f2-)
+curl -s -X POST http://127.0.0.1:8000/admin/catalog/variants/OM-P-000001-42-BLK/offers \
+  -H "X-Admin-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"price_mmk":85000,"compare_at_price_mmk":100000}'
+```
