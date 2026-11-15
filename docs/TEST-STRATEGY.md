@@ -51,3 +51,6 @@ Health liveness/readiness (incl. DB-down path), configuration defaults and produ
 
 ## Catalog tests (Phase 3 task 1)
 `test_catalog_schemas.py` (no database), `test_catalog_service.py` (real PostgreSQL, savepoint rollback per test: category rules and the excluded-category guard, public codes, variant uniqueness incl. NULL size/color, status rules, listing/search/pagination, database-level constraints), `test_catalog_api.py` (auth, 503 when no key, end-to-end flow, hidden inactive variants, error envelope, no internal ids), `test_config_admin.py`.
+
+## Offer tests (Phase 3 task 2a)
+`test_offer_schemas.py` (strict whole-kyat prices, compare-at, timezones), `test_offers_service.py` (time-window price resolution, overlap and adjacency matrix, cancel, history, database constraints, price-dependent publishing and visibility), `test_offers_api.py`, and `test_offers_concurrency.py`: six simultaneous overlapping offers from separate connections with real commits; exactly one must win and one active offer must remain (the test cleans up its own rows).

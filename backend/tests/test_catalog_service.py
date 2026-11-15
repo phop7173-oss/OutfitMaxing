@@ -11,6 +11,7 @@ from app.modules.products.models import ProductImage
 from app.modules.products.schemas import (
     CategoryCreate,
     ImageCreate,
+    OfferCreate,
     ProductCreate,
     ProductUpdate,
     VariantCreate,
@@ -35,6 +36,10 @@ def add_variant(db, code, sku, **kw):
 
 def set_status(db, code, status):
     return service.update_product(db, code, ProductUpdate(status=status))
+
+
+def price(db, sku, amount=100_000, **kw):
+    return service.create_offer(db, sku, OfferCreate(price_mmk=amount, **kw))
 
 
 # ---- categories -----------------------------------------------------------------------------
@@ -142,6 +147,9 @@ def test_publish_needs_an_active_variant(db_session):
     with pytest.raises(UnprocessableError, match="active variant"):
         set_status(db_session, code, "ACTIVE")
     add_variant(db_session, code, "SKU-1", size="42")
+    with pytest.raises(UnprocessableError, match="price"):
+        set_status(db_session, code, "ACTIVE")
+    price(db_session, "SKU-1")
     assert set_status(db_session, code, "ACTIVE").status == "ACTIVE"
 
 
@@ -149,6 +157,7 @@ def test_status_transitions_are_whitelisted(db_session):
     make_category(db_session)
     code = make_product(db_session).public_code
     add_variant(db_session, code, "SKU-1", size="42")
+    price(db_session, "SKU-1")
     set_status(db_session, code, "ACTIVE")
     assert set_status(db_session, code, "ARCHIVED").status == "ARCHIVED"
     with pytest.raises(UnprocessableError, match="Cannot change status"):
@@ -161,9 +170,11 @@ def test_cannot_deactivate_last_active_variant_of_active_product(db_session):
     code = make_product(db_session).public_code
     add_variant(db_session, code, "SKU-1", size="42")
     add_variant(db_session, code, "SKU-2", size="43")
+    price(db_session, "SKU-1")
+    price(db_session, "SKU-2")
     set_status(db_session, code, "ACTIVE")
     service.update_variant(db_session, "SKU-1", VariantUpdate(is_active=False))
-    with pytest.raises(UnprocessableError, match="last active variant"):
+    with pytest.raises(UnprocessableError, match="last active"):
         service.update_variant(db_session, "SKU-2", VariantUpdate(is_active=False))
 
 
@@ -178,6 +189,7 @@ def test_unknown_variant_and_product(db_session):
 def publish(db, name, sku, category="sneakers", **kw):
     code = make_product(db, category=category, name=name, **kw).public_code
     add_variant(db, code, sku, size="42")
+    price(db, sku)
     set_status(db, code, "ACTIVE")
     return code
 

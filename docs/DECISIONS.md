@@ -13,3 +13,4 @@
 | Scope | No marketplace features and no "AI fashion studio" until specified | Assumed; awaiting explicit owner confirmation |
 
 Open items: see docs/IMPLEMENTATION-PLAN.md (U1-U3, U6-U12).
+| Pricing | MMK prices are whole kyat (integers); optional compare-at price; sales run between start and end dates; publishing needs a price; weight/package size deferred to the delivery phase | Approved ("go 2a") |

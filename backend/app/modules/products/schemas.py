@@ -1,9 +1,10 @@
 """Request/response schemas for the catalog. Inputs reject unknown fields."""
 
 import json
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Slug = Annotated[
     str, StringConstraints(min_length=2, max_length=60, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -16,6 +17,9 @@ ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
 Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length=5000)]
 HttpsUrl = Annotated[str, StringConstraints(max_length=2048, pattern=r"^https://\S+$")]
+
+# Whole kyat only: strict integers (no 1500.5, no "1500", no true).
+Price = Annotated[int, Field(strict=True, ge=1, le=10_000_000_000)]
 
 FulfilmentMode = Literal["STOCK", "PREORDER"]
 ProductStatus = Literal["DRAFT", "ACTIVE", "ARCHIVED"]
@@ -111,6 +115,25 @@ class ImageCreate(_Input):
         return self
 
 
+class OfferCreate(_Input):
+    price_mmk: Price
+    compare_at_price_mmk: Price | None = None
+    starts_at: datetime | None = None  # default: now (server time)
+    ends_at: datetime | None = None  # default: open-ended
+
+    @model_validator(mode="after")
+    def _rules(self) -> "OfferCreate":
+        for name in ("starts_at", "ends_at"):
+            value = getattr(self, name)
+            if value is not None and value.utcoffset() is None:
+                raise ValueError(f"{name} must include a timezone, e.g. 2026-12-01T00:00:00+06:30")
+        if self.compare_at_price_mmk is not None and self.compare_at_price_mmk <= self.price_mmk:
+            raise ValueError("compare_at_price_mmk must be higher than price_mmk")
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be after starts_at")
+        return self
+
+
 class CategoryOut(BaseModel):
     name: str
     slug: str
@@ -124,6 +147,8 @@ class VariantOut(BaseModel):
     color: str | None
     extra: dict[str, Any]
     is_active: bool
+    price_mmk: int | None = None
+    compare_at_price_mmk: int | None = None
 
 
 class ImageOut(BaseModel):
@@ -132,6 +157,17 @@ class ImageOut(BaseModel):
     alt_text: str | None
     sort_order: int
     variant_sku: str | None
+
+
+class OfferOut(BaseModel):
+    id: str
+    sku: str
+    price_mmk: int
+    compare_at_price_mmk: int | None
+    starts_at: datetime
+    ends_at: datetime | None
+    status: str
+    is_current: bool
 
 
 class ProductOut(BaseModel):
