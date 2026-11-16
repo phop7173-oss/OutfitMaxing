@@ -149,6 +149,7 @@ class VariantOut(BaseModel):
     is_active: bool
     price_mmk: int | None = None
     compare_at_price_mmk: int | None = None
+    availability: str | None = None  # in_stock | low_stock | out_of_stock | preorder
 
 
 class ImageOut(BaseModel):

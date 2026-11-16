@@ -15,7 +15,7 @@ Status: Phase 1 documents approved as baseline (with the clarifications below). 
 | 1 | Planning docs | Approved | |
 | 2 | Foundation scaffold: FastAPI app, config, SQLAlchemy base, Alembic (no tables), health endpoints, logging, pytest harness, Docker Compose (api, postgres, redis), `.gitignore`, `.env.example`, CI | Delivered, **not yet executed** (see below) | `docker compose up` works; CI green on GitHub |
 | 2.1 | Verification and CI hardening: Docker image build job, informational Python 3.14 job, local line-length check (`scripts/check_line_length.py`, wired into `scripts/termux/lint.sh`) | Delivered (see PR) | CI green including the docker-build job |
-| 3 | Task 1 (catalog) delivered and verified (91 tests on Termux, CI green). Task 2a (offers/prices) delivered, pending verification. Business core: products, variants, offers, suppliers, inventory, reservations, orders, checkout, payments abstraction + COD, `shop_settings`; adds Celery worker | Not started | Inventory + order test matrix green incl. concurrent last-item test |
+| 3 | Task 1 (catalog) delivered and verified (91 tests on Termux, CI green). Task 2a (offers/prices) delivered and verified (139 tests, CI green). Task 2b (stock and reservations) delivered, pending verification. Business core: products, variants, offers, suppliers, inventory, reservations, orders, checkout, payments abstraction + COD, `shop_settings`; adds Celery worker | Not started | Inventory + order test matrix green incl. concurrent last-item test |
 | 4 | Telegram + AI provider abstraction (Gemini first), tools, conversation persistence | Not started | AI + Telegram matrices green |
 | 5 | Delivery abstraction, own delivery, mock courier, tracking, manual digital-payment verification flow | Not started | Delivery matrix green |
 | 6 | Admin API, operational controls, security tests, deployment + backup/restore docs | Not started | Security checklist passed; restore drill documented |
@@ -59,5 +59,8 @@ Status: Phase 1 documents approved as baseline (with the clarifications below). 
 ## Phase 3 task 1: catalog (delivered and verified)
 Tables `product_categories`, `products`, `product_variants`, `product_images` (migration 0001), public read API and interim key-protected admin API, 60+ tests (schemas without a database; service and API against real PostgreSQL). Details: docs/CATALOG-API.md. Next: offers (prices) and inventory/reservations with the concurrency tests. Owner decisions are logged in docs/DECISIONS.md.
 
-## Phase 3 task 2a: offers (prices) (delivered, pending verification)
+## Phase 3 task 2a: offers (prices) (delivered and verified)
 Table `offers` (migration 0002), price endpoints, publishing and public visibility depend on a current price, concurrency test for overlapping offers. Details: docs/CATALOG-API.md. Next: 2b stock and reservations (atomic reservation, 15-minute expiry, movements, concurrent last-item test), then 2c preorders.
+
+## Phase 3 task 2b: stock and reservations (delivered, pending verification)
+Tables `inventory_locations` (seeded with "main"), `inventory_balances`, `inventory_reservations`, `inventory_movements` (migration 0003); atomic reservation with expiry, release, commit, admin stock endpoints, public availability labels; concurrency tests (last item, 40 buyers, simultaneous commits, expiry race). Details: docs/INVENTORY.md. Next: 2c preorders (supplier capacity, sourcing requests), then the order and checkout engine, which will call the reservation service.

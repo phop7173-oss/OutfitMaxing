@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.database.session import get_db
+from app.modules.inventory import service as inventory_service
 from app.modules.products import service
 from app.modules.products.models import Offer, Product, ProductCategory
 from app.modules.products.schemas import (
@@ -46,7 +47,20 @@ def prices_for(db: Session, products: list[Product]) -> dict[UUID, Offer]:
     return service.current_prices(db, [v.id for p in products for v in p.variants])
 
 
-def product_out(p: Product, *, public: bool, prices: dict[UUID, Offer]) -> ProductOut:
+def availability_for(db: Session, products: list[Product]) -> dict[UUID, str]:
+    """Customer-facing stock state per variant (never exact quantities)."""
+    ids = [v.id for p in products for v in p.variants]
+    available = inventory_service.available_quantities(db, ids)
+    return {
+        v.id: inventory_service.availability_label(p.fulfilment_mode, available.get(v.id, 0))
+        for p in products
+        for v in p.variants
+    }
+
+
+def product_out(
+    p: Product, *, public: bool, prices: dict[UUID, Offer], availability: dict[UUID, str]
+) -> ProductOut:
     """Public view: only active variants that have a current price (the others cannot be
     bought). Admin view: everything, with price null where none is in effect."""
     variants = [v for v in p.variants if not public or (v.is_active and v.id in prices)]
@@ -71,6 +85,7 @@ def product_out(p: Product, *, public: bool, prices: dict[UUID, Offer]) -> Produ
                 is_active=v.is_active,
                 price_mmk=prices[v.id].price_mmk if v.id in prices else None,
                 compare_at_price_mmk=prices[v.id].compare_at_price_mmk if v.id in prices else None,
+                availability=availability.get(v.id),
             )
             for v in variants
         ],
@@ -88,7 +103,9 @@ def product_out(p: Product, *, public: bool, prices: dict[UUID, Offer]) -> Produ
 
 
 def admin_out(db: Session, p: Product) -> ProductOut:
-    return product_out(p, public=False, prices=prices_for(db, [p]))
+    return product_out(
+        p, public=False, prices=prices_for(db, [p]), availability=availability_for(db, [p])
+    )
 
 
 def offer_out(o: Offer) -> OfferOut:
@@ -122,8 +139,11 @@ def public_products(
         db, category_slug=category, q=q, limit=limit, offset=offset
     )
     prices = prices_for(db, items)
+    availability = availability_for(db, items)
     return ProductPage(
-        items=[product_out(p, public=True, prices=prices) for p in items],
+        items=[
+            product_out(p, public=True, prices=prices, availability=availability) for p in items
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -133,7 +153,12 @@ def public_products(
 @public_router.get("/products/{code}")
 def public_product(code: str, db: Db) -> ProductOut:
     product = service.get_product(db, code, public=True)
-    return product_out(product, public=True, prices=prices_for(db, [product]))
+    return product_out(
+        product,
+        public=True,
+        prices=prices_for(db, [product]),
+        availability=availability_for(db, [product]),
+    )
 
 
 # ---- admin ----------------------------------------------------------------------------------
