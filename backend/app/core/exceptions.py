@@ -35,6 +35,11 @@ class UnprocessableError(AppError):
     code = "unprocessable"
 
 
+class InsufficientStockError(AppError):
+    status_code = 409
+    code = "insufficient_stock"
+
+
 class UnauthorizedError(AppError):
     status_code = 401
     code = "unauthorized"

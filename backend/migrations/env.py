@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 
 from app.core.config import get_settings
 from app.database.base import Base
+from app.modules.inventory import models as _inventory_models  # noqa: F401
 from app.modules.products import models as _catalog_models  # noqa: F401  (registers tables)
 
 config = context.config

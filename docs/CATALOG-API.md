@@ -52,3 +52,6 @@ curl -s -X POST http://127.0.0.1:8000/admin/catalog/variants/OM-P-000001-42-BLK/
   -H "X-Admin-Key: $KEY" -H "Content-Type: application/json" \
   -d '{"price_mmk":85000,"compare_at_price_mmk":100000}'
 ```
+
+## Stock labels on variants (task 2b)
+Each variant has `availability`: `in_stock`, `low_stock`, `out_of_stock` or `preorder` (see docs/INVENTORY.md). Stock quantities are admin-only (`/admin/inventory/...`).

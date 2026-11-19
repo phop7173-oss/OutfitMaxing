@@ -59,3 +59,6 @@ Only staff/owner roles can mark a digital payment verified, with actor and evide
 
 ## Interim admin key (catalog task)
 Catalog write endpoints need `X-Admin-Key` (`ADMIN_API_KEY`, min 16 chars, compared in constant time, registered for log redaction). It fails closed when unset. It is a single shared key with no roles and no rate limiting; it is replaced by login plus role-based authorization in Phase 6, and rate limiting is still missing (see audit). Validation errors never echo submitted values.
+
+## Inventory (task 2b)
+Stock changes are admin-only (interim key), need a written note for manual adjustments, and are fully logged in `inventory_movements`. There is deliberately no HTTP endpoint to reserve or commit stock, and the future AI tools must not be able to change stock; checkout calls the service. Public responses show availability labels only, so competitors cannot read exact inventory.

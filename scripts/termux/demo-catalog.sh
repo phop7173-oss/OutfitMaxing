@@ -27,4 +27,7 @@ echo "== prices"
 call POST "/admin/catalog/variants/$CODE-42-BLK/offers" '{"price_mmk":85000,"compare_at_price_mmk":100000}'
 call POST "/admin/catalog/variants/$CODE-43-BLK/offers" '{"price_mmk":85000}' >/dev/null
 echo "== publish"; call PATCH "/admin/catalog/products/$CODE" '{"status":"ACTIVE"}'
+echo "== stock"
+call POST "/admin/inventory/variants/$CODE-42-BLK/receive" '{"quantity":5,"note":"Initial stock"}'
+call POST "/admin/inventory/variants/$CODE-43-BLK/receive" '{"quantity":2,"note":"Initial stock"}' >/dev/null
 echo "== public list (no key needed)"; curl -sS "$BASE/catalog/products?category=sneakers"; echo

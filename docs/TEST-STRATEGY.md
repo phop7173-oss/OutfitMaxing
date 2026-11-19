@@ -54,3 +54,6 @@ Health liveness/readiness (incl. DB-down path), configuration defaults and produ
 
 ## Offer tests (Phase 3 task 2a)
 `test_offer_schemas.py` (strict whole-kyat prices, compare-at, timezones), `test_offers_service.py` (time-window price resolution, overlap and adjacency matrix, cancel, history, database constraints, price-dependent publishing and visibility), `test_offers_api.py`, and `test_offers_concurrency.py`: six simultaneous overlapping offers from separate connections with real commits; exactly one must win and one active offer must remain (the test cleans up its own rows).
+
+## Inventory tests (task 2b)
+`test_inventory_schemas.py` (strict whole-number quantities, notes, labels), `test_inventory_service.py` (receive/adjust rules, reserve/release/commit, expiry, sweeper, idempotency, movement-sum invariant, database constraints), `test_inventory_api.py` (auth, validation, public labels, preorder never in stock), `test_inventory_concurrency.py` with real commits: 20 buyers for the last item (exactly one wins), 40 buyers for 10 units (exactly 10 win; reserved equals active holds), 6 simultaneous commits of one reservation (deducted once), and an expiry-versus-new-buyers race (never oversells). Committed test rows are removed by the `make_committed_variant` fixture.
