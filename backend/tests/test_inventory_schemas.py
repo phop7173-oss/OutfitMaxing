@@ -43,4 +43,5 @@ def test_availability_labels():
     assert availability_label("STOCK", 1) == "low_stock"
     assert availability_label("STOCK", LOW_STOCK_THRESHOLD) == "low_stock"
     assert availability_label("STOCK", LOW_STOCK_THRESHOLD + 1) == "in_stock"
-    assert availability_label("PREORDER", 100) == "preorder"
+    assert availability_label("PREORDER", 100) == "preorder_closed"
+    assert availability_label("PREORDER", 0, preorder_open=True) == "preorder"

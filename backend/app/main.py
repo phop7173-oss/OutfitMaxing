@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 
-from app.api import catalog, health, inventory
+from app.api import catalog, health, inventory, suppliers
 from app.core.config import get_settings
 from app.core.exceptions import internal_error_response, register_exception_handlers
 from app.core.logging import configure_logging, request_id_var
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(catalog.public_router)
     app.include_router(catalog.admin_router)
     app.include_router(inventory.admin_router)
+    app.include_router(suppliers.admin_router)
     logging.getLogger(__name__).info("app_started", extra={"fields": {"env": settings.app_env}})
     return app
 

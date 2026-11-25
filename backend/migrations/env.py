@@ -6,14 +6,16 @@ from sqlalchemy import create_engine
 from app.core.config import get_settings
 from app.database.base import Base
 from app.modules.inventory import models as _inventory_models  # noqa: F401
+from app.modules.notifications import models as _notification_models  # noqa: F401
 from app.modules.products import models as _catalog_models  # noqa: F401  (registers tables)
+from app.modules.suppliers import models as _supplier_models  # noqa: F401
 
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata
 # Functional index managed only in the migration (see migrations/versions/0001_catalog.py).
-MANUAL_INDEXES = {"uq_product_variants_combo"}
+MANUAL_INDEXES = {"uq_product_variants_combo", "uq_sourcing_events_overdue_once"}
 
 
 def include_object(obj, name, type_, reflected, compare_to):  # noqa: ANN001

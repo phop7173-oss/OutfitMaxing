@@ -40,6 +40,16 @@ class InsufficientStockError(AppError):
     code = "insufficient_stock"
 
 
+class CapacityExceededError(AppError):
+    status_code = 409
+    code = "preorder_capacity_exceeded"
+
+
+class InsufficientCapacityError(AppError):
+    status_code = 409
+    code = "insufficient_capacity"
+
+
 class UnauthorizedError(AppError):
     status_code = 401
     code = "unauthorized"

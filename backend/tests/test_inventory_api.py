@@ -136,4 +136,4 @@ def test_public_availability_labels_follow_stock_without_exact_numbers(api, db_s
 def test_preorder_products_are_never_shown_as_in_stock(api):
     code = published_variant(api, sku="PRE-1", mode="PREORDER", slug="preorders")
     receive(api, "PRE-1", 50)
-    assert public_label(api, code) == "preorder"
+    assert public_label(api, code) == "preorder_closed"  # no supplier capacity, never in stock

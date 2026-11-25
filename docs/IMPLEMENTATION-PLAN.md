@@ -64,3 +64,6 @@ Table `offers` (migration 0002), price endpoints, publishing and public visibili
 
 ## Phase 3 task 2b: stock and reservations (delivered, pending verification)
 Tables `inventory_locations` (seeded with "main"), `inventory_balances`, `inventory_reservations`, `inventory_movements` (migration 0003); atomic reservation with expiry, release, commit, admin stock endpoints, public availability labels; concurrency tests (last item, 40 buyers, simultaneous commits, expiry race). Details: docs/INVENTORY.md. Next: 2c preorders (supplier capacity, sourcing requests), then the order and checkout engine, which will call the reservation service.
+
+## Phase 3 task 2c: preorders and supplier sourcing (delivered, pending verification)
+Tables `suppliers`, `supplier_products`, `supplier_stock_checks`, `sourcing_requests`, `preorder_commitments`, `outbox_events` (migration 0004); atomic preorder capacity, deposit-gated sourcing requests, lifecycle with strict oldest-first allocation, explicit surplus-to-stock, queued customer/owner notifications, public preorder labels; concurrency tests (capacity race, simultaneous requests and releases). Details: docs/PREORDERS.md. Next: the order and checkout engine (calls the reservation and commitment services; applies the pending policies), then payments (manual verification + MyanMyanPay when its API documentation is available).

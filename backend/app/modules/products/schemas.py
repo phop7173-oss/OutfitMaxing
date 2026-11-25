@@ -149,7 +149,12 @@ class VariantOut(BaseModel):
     is_active: bool
     price_mmk: int | None = None
     compare_at_price_mmk: int | None = None
-    availability: str | None = None  # in_stock | low_stock | out_of_stock | preorder
+    # in_stock | low_stock | out_of_stock | preorder | preorder_closed
+    availability: str | None = None
+    preorder_lead_days_min: int | None = None
+    preorder_lead_days_max: int | None = None
+    preorder_open: bool | None = None  # preorder variants only: can a new preorder be taken
+    estimated_arrival_days: list[int] | None = None  # [min, max] days, preorder only
 
 
 class ImageOut(BaseModel):
