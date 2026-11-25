@@ -70,3 +70,6 @@ Table `offers` (variant_id, price_mmk BIGINT > 0, compare_at_price_mmk > price, 
 
 ## Implemented in migration 0003 (inventory)
 `inventory_locations` (seeded `main`), `inventory_balances` (unique per variant+location; CHECK on_hand >= 0, reserved >= 0, reserved <= on_hand), `inventory_reservations` (status ACTIVE|COMMITTED|RELEASED|EXPIRED, expires_at, optional unique idempotency_key, reference_type/reference_id for the future order link), `inventory_movements` (append-only; `created_at` uses clock_timestamp() so rows from one transaction order correctly). Supplier preorder tables are task 2c.
+
+## Implemented in migration 0004 (preorders)
+`suppliers`, `supplier_products` (capacity, committed, lead days; CHECK committed <= capacity), `supplier_stock_checks`, `sourcing_requests`, `preorder_commitments` (links to the future order line via reference_type/reference_id), `outbox_events` (transactional outbox with a unique dedupe key so repeated operations cannot notify twice). `sourcing_requests` and `preorder_commitments` were added to the table list with the reasons given in docs/PREORDERS.md; the original `supplier_stock_checks` is kept as an informational record.

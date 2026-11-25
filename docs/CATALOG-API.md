@@ -55,3 +55,6 @@ curl -s -X POST http://127.0.0.1:8000/admin/catalog/variants/OM-P-000001-42-BLK/
 
 ## Stock labels on variants (task 2b)
 Each variant has `availability`: `in_stock`, `low_stock`, `out_of_stock` or `preorder` (see docs/INVENTORY.md). Stock quantities are admin-only (`/admin/inventory/...`).
+
+## Preorder labels (task 2c)
+PREORDER variants show `availability` `preorder` (plus `preorder_lead_days_min/max`) while the owner's preorder capacity remains, otherwise `preorder_closed`. See docs/PREORDERS.md.

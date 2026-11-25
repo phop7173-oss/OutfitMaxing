@@ -1,6 +1,6 @@
 """Catalog API. Public: read-only, ACTIVE products. Admin: write, requires X-Admin-Key."""
 
-from typing import Annotated
+from typing import Annotated, NamedTuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -10,7 +10,7 @@ from app.api.deps import require_admin
 from app.database.session import get_db
 from app.modules.inventory import service as inventory_service
 from app.modules.products import service
-from app.modules.products.models import Offer, Product, ProductCategory
+from app.modules.products.models import Offer, Product, ProductCategory, ProductVariant
 from app.modules.products.schemas import (
     CategoryCreate,
     CategoryOut,
@@ -26,12 +26,19 @@ from app.modules.products.schemas import (
     VariantOut,
     VariantUpdate,
 )
+from app.modules.suppliers import service as supplier_service
 
 public_router = APIRouter(prefix="/catalog", tags=["catalog"])
 admin_router = APIRouter(
     prefix="/admin/catalog", tags=["catalog-admin"], dependencies=[Depends(require_admin)]
 )
 Db = Annotated[Session, Depends(get_db)]
+
+
+class StockInfo(NamedTuple):
+    label: str
+    lead_days_min: int | None = None
+    lead_days_max: int | None = None
 
 
 def category_out(c: ProductCategory) -> CategoryOut:
@@ -47,19 +54,51 @@ def prices_for(db: Session, products: list[Product]) -> dict[UUID, Offer]:
     return service.current_prices(db, [v.id for p in products for v in p.variants])
 
 
-def availability_for(db: Session, products: list[Product]) -> dict[UUID, str]:
-    """Customer-facing stock state per variant (never exact quantities)."""
+def availability_for(db: Session, products: list[Product]) -> dict[UUID, StockInfo]:
+    """Customer-facing stock state per variant (never exact quantities). Preorder variants also
+    carry the estimated lead-time range while preorders are open."""
     ids = [v.id for p in products for v in p.variants]
     available = inventory_service.available_quantities(db, ids)
-    return {
-        v.id: inventory_service.availability_label(p.fulfilment_mode, available.get(v.id, 0))
-        for p in products
-        for v in p.variants
-    }
+    preorder_ids = [
+        v.id for p in products if p.fulfilment_mode == "PREORDER" for v in p.variants
+    ]
+    open_preorders = supplier_service.preorder_info(db, preorder_ids)
+    info: dict[UUID, StockInfo] = {}
+    for p in products:
+        for v in p.variants:
+            window = open_preorders.get(v.id)
+            label = inventory_service.availability_label(
+                p.fulfilment_mode, available.get(v.id, 0), preorder_open=window is not None
+            )
+            info[v.id] = StockInfo(label, *(window or (None, None)))
+    return info
+
+
+def variant_out(
+    v: ProductVariant, prices: dict[UUID, Offer], availability: dict[UUID, StockInfo]
+) -> VariantOut:
+    offer = prices.get(v.id)
+    stock = availability.get(v.id)
+    return VariantOut(
+        sku=v.sku,
+        size=v.size,
+        color=v.color,
+        extra=v.extra,
+        is_active=v.is_active,
+        price_mmk=offer.price_mmk if offer else None,
+        compare_at_price_mmk=offer.compare_at_price_mmk if offer else None,
+        availability=stock.label if stock else None,
+        preorder_lead_days_min=stock.lead_days_min if stock else None,
+        preorder_lead_days_max=stock.lead_days_max if stock else None,
+    )
 
 
 def product_out(
-    p: Product, *, public: bool, prices: dict[UUID, Offer], availability: dict[UUID, str]
+    p: Product,
+    *,
+    public: bool,
+    prices: dict[UUID, Offer],
+    availability: dict[UUID, StockInfo],
 ) -> ProductOut:
     """Public view: only active variants that have a current price (the others cannot be
     bought). Admin view: everything, with price null where none is in effect."""
@@ -76,19 +115,7 @@ def product_out(
         fulfilment_mode=p.fulfilment_mode,
         status=p.status,
         attributes=p.attributes,
-        variants=[
-            VariantOut(
-                sku=v.sku,
-                size=v.size,
-                color=v.color,
-                extra=v.extra,
-                is_active=v.is_active,
-                price_mmk=prices[v.id].price_mmk if v.id in prices else None,
-                compare_at_price_mmk=prices[v.id].compare_at_price_mmk if v.id in prices else None,
-                availability=availability.get(v.id),
-            )
-            for v in variants
-        ],
+        variants=[variant_out(v, prices, availability) for v in variants],
         images=[
             ImageOut(
                 url=i.url,

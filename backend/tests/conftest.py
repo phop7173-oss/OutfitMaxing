@@ -106,3 +106,73 @@ def make_committed_variant(_db_engine):
         for slug, sku in created:
             for statement in statements:
                 conn.execute(text(statement), {"slug": slug, "sku": sku})
+
+
+@pytest.fixture
+def make_committed_preorder(_db_engine):
+    """Factory: a published PREORDER variant with a supplier and preorder capacity, as real
+    committed rows. Returns (variant_id, supplier_product_id). Cleaned up at teardown."""
+    from app.modules.products import service as catalog_service
+    from app.modules.products.schemas import (
+        CategoryCreate,
+        OfferCreate,
+        ProductCreate,
+        ProductUpdate,
+        VariantCreate,
+    )
+    from app.modules.suppliers import service as supplier_service
+    from app.modules.suppliers.schemas import SupplierCreate, SupplierProductCreate
+
+    created: list[tuple[str, str, str]] = []
+
+    def make(capacity: int):
+        suffix = uuid.uuid4().hex[:8]
+        slug, sku, code = f"p-{suffix}", f"P-{suffix}", f"sup-{suffix}"
+        created.append((slug, sku, code))
+        with Session(_db_engine, expire_on_commit=False) as s:
+            catalog_service.create_category(s, CategoryCreate(name=f"Pre {suffix}", slug=slug))
+            product = catalog_service.create_product(
+                s, ProductCreate(name="Imported", category_slug=slug, fulfilment_mode="PREORDER")
+            )
+            product = catalog_service.add_variant(
+                s, product.public_code, VariantCreate(sku=sku, size="M")
+            )
+            variant_id = product.variants[0].id
+            catalog_service.create_offer(s, sku, OfferCreate(price_mmk=50_000))
+            catalog_service.update_product(s, product.public_code, ProductUpdate(status="ACTIVE"))
+            supplier_service.create_supplier(s, SupplierCreate(code=code, name="Test supplier"))
+            sp = supplier_service.create_supplier_product(
+                s,
+                code,
+                SupplierProductCreate(
+                    sku=sku, lead_days_min=10, lead_days_max=20, capacity=capacity
+                ),
+            )
+            return variant_id, sp.id
+
+    yield make
+
+    # literal SQL only (ruff S608 rejects SQL built by concatenation or f-strings)
+    statements = [
+        "DELETE FROM preorder_commitments WHERE variant_id IN "
+        "(SELECT id FROM product_variants WHERE sku = :sku)",
+        "DELETE FROM sourcing_requests WHERE supplier_product_id IN "
+        "(SELECT id FROM supplier_products WHERE variant_id IN "
+        "(SELECT id FROM product_variants WHERE sku = :sku))",
+        "DELETE FROM supplier_stock_checks WHERE supplier_product_id IN "
+        "(SELECT id FROM supplier_products WHERE variant_id IN "
+        "(SELECT id FROM product_variants WHERE sku = :sku))",
+        "DELETE FROM supplier_products WHERE variant_id IN "
+        "(SELECT id FROM product_variants WHERE sku = :sku)",
+        "DELETE FROM suppliers WHERE code = :code",
+        "DELETE FROM offers WHERE variant_id IN "
+        "(SELECT id FROM product_variants WHERE sku = :sku)",
+        "DELETE FROM product_variants WHERE sku = :sku",
+        "DELETE FROM products WHERE category_id IN "
+        "(SELECT id FROM product_categories WHERE slug = :slug)",
+        "DELETE FROM product_categories WHERE slug = :slug",
+    ]
+    with _db_engine.begin() as conn:
+        for slug, sku, code in created:
+            for statement in statements:
+                conn.execute(text(statement), {"slug": slug, "sku": sku, "code": code})

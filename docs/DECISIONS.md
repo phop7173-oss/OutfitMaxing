@@ -15,3 +15,4 @@
 Open items: see docs/IMPLEMENTATION-PLAN.md (U1-U3, U6-U12).
 | Pricing | MMK prices are whole kyat (integers); optional compare-at price; sales run between start and end dates; publishing needs a price; weight/package size deferred to the delivery phase | Approved ("go 2a") |
 | Stock display | Public shows in stock / low stock (3 or fewer) / out of stock / preorder, never exact quantities; out-of-stock variants stay visible; one location "Main" for now | Approved ("defaults ok") |
+| Preorders | Supplier asked only after deposit verified; owner alert after 3 days without confirmation (no auto-cancel); estimated window from supplier lead days; owner-set capacity (none = closed); customers notified on window change/passed, refunds manual; arrivals to waiting preorders first (oldest first), surplus to stock only explicitly | Approved |

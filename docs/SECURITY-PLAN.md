@@ -62,3 +62,6 @@ Catalog write endpoints need `X-Admin-Key` (`ADMIN_API_KEY`, min 16 chars, compa
 
 ## Inventory (task 2b)
 Stock changes are admin-only (interim key), need a written note for manual adjustments, and are fully logged in `inventory_movements`. There is deliberately no HTTP endpoint to reserve or commit stock, and the future AI tools must not be able to change stock; checkout calls the service. Public responses show availability labels only, so competitors cannot read exact inventory.
+
+## Preorders (task 2c)
+Supplier cost (`unit_cost_mmk`) and capacity are admin-only; public responses show only a label and lead-day range. No HTTP endpoint creates commitments (the order engine will). Outbox payloads contain ids and dates, never names, phones or addresses. Deposit verification is a staff/owner action; no AI tool may mark a deposit verified or change capacity.

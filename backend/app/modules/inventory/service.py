@@ -67,6 +67,7 @@ def _change_on_hand(
     reason: str,
     note: str | None,
     actor: str,
+    commit: bool = True,
 ) -> None:
     if delta > 0:
         stmt = pg_insert(InventoryBalance).values(
@@ -103,7 +104,8 @@ def _change_on_hand(
             actor=actor,
         )
     )
-    session.commit()
+    if commit:
+        session.commit()
 
 
 def receive_stock(
@@ -114,12 +116,22 @@ def receive_stock(
     location_code: str = "main",
     note: str | None = None,
     actor: str = "admin",
+    commit: bool = True,
 ) -> None:
     if quantity < 1:
         raise UnprocessableError("quantity must be at least 1")
     variant = get_variant_by_sku(session, sku)
     location = get_location(session, location_code)
-    _change_on_hand(session, variant, location, quantity, reason="RECEIVE", note=note, actor=actor)
+    _change_on_hand(
+        session,
+        variant,
+        location,
+        quantity,
+        reason="RECEIVE",
+        note=note,
+        actor=actor,
+        commit=commit,
+    )
 
 
 def adjust_stock(
@@ -225,10 +237,13 @@ def available_quantities(
     return {vid: max(int(on_hand.get(vid, 0)) - int(held.get(vid, 0)), 0) for vid in variant_ids}
 
 
-def availability_label(fulfilment_mode: str, available: int) -> str:
-    """Customer-facing stock state. Preorder items are never shown as physically in stock."""
+def availability_label(
+    fulfilment_mode: str, available: int, *, preorder_open: bool = False
+) -> str:
+    """Customer-facing stock state. Preorder items are never shown as physically in stock:
+    they are "preorder" while the owner's preorder capacity lasts, else "preorder_closed"."""
     if fulfilment_mode == "PREORDER":
-        return "preorder"
+        return "preorder" if preorder_open else "preorder_closed"
     if available <= 0:
         return "out_of_stock"
     if available <= LOW_STOCK_THRESHOLD:
@@ -371,9 +386,9 @@ def reserve_stock(
         reference_id=reference_id,
     )
     session.add(reservation)
-    session.flush()
-    _add_movement(session, reservation, reason="RESERVE", delta_reserved=quantity)
     try:
+        session.flush()  # a concurrent request with the same key fails here
+        _add_movement(session, reservation, reason="RESERVE", delta_reserved=quantity)
         session.commit()
     except IntegrityError as exc:
         session.rollback()

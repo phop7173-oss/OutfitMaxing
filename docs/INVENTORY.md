@@ -19,7 +19,7 @@ Physical stock only. Preorders (supplier sourcing) are task 2c and stay separate
 - `GET /admin/inventory/variants/{sku}/movements?limit=50`
 
 ## Public display
-Variants carry `availability`: `in_stock`, `low_stock` (3 or fewer; constant `LOW_STOCK_THRESHOLD`), `out_of_stock` or `preorder`. No exact quantities are exposed. Out-of-stock variants stay visible. Availability counts on-hand minus unexpired holds, so an expired but unswept hold does not distort it.
+Variants carry `availability`: `in_stock`, `low_stock` (3 or fewer; constant `LOW_STOCK_THRESHOLD`), `out_of_stock`, `preorder` or `preorder_closed` (see docs/PREORDERS.md). No exact quantities are exposed. Out-of-stock variants stay visible. Availability counts on-hand minus unexpired holds, so an expired but unswept hold does not distort it.
 
 ## Known limits
 One location only (no admin endpoint to add more yet); no HTTP reservation API (by design); the expiry sweeper is not scheduled until the worker exists; a direct SQL change to balances bypasses the movement log (the constraints still protect the invariants).
